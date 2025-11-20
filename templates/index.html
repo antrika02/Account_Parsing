@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accounting Assistant</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #1e1e1e;
+            color: #d3d3d3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+            height: 100vh;
+            justify-content: space-between;
+        }
+
+        header {
+            width: 100%;
+            background-color: #333;
+            padding: 20px;
+            text-align: center;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            color: #fff;
+            font-size: 3rem;
+            margin: 0;
+        }
+
+        #chatbox {
+            width: 80%;
+            max-width: 600px;
+            height: 400px;
+            border: 1px solid #444;
+            background-color: #2e2e2e;
+            padding: 20px;
+            border-radius: 10px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            color: #fff;
+            flex-grow: 1;
+        }
+
+        #input-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            bottom: 20px;
+            width: 100%;
+            padding: 10px;
+            background-color: #333;
+            border-radius: 10px;
+        }
+
+        #input {
+            width: 60%;
+            padding: 12px;
+            border-radius: 5px;
+            border: none;
+            margin-right: 10px;
+            background-color: #333;
+            color: #fff;
+        }
+
+        #send-btn {
+            padding: 12px 20px;
+            border-radius: 5px;
+            background-color: #4caf50;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        #send-btn:hover {
+            background-color: #45a049;
+        }
+
+        /* Microphone Button Styles */
+        #mic-btn {
+            background-color: #4caf50;
+            border: none;
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 50%;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            position: relative;
+        }
+
+        #mic-btn.recording {
+            background-color: #f44336;
+        }
+
+        #mic-btn .fa-microphone {
+            font-size: 24px;
+            color: #fff;
+        }
+
+        #mic-btn .dot {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: red;
+            display: none;
+        }
+
+        #mic-btn.recording .dot {
+            display: block;
+        }
+
+        p {
+            margin: 10px 0;
+        }
+
+        strong {
+            color: #c8c8c8;
+        }
+
+        pre {
+            color: #fff;
+            background-color: #333;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-width: 100%;
+            overflow-x: auto;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Accounting Assistant</h1>
+        <p>Provide accounting-related inputs for processing.</p>
+    </header>
+
+    <div id="chatbox"></div>
+
+    <div id="input-container">
+        <!-- Microphone Button -->
+        <button id="mic-btn">
+            <i class="fas fa-microphone"></i>
+            <div class="dot"></div>
+        </button>
+
+        <!-- Input Field and Send Button -->
+        <input type="text" id="input" placeholder="Type your accounting sentence here..." />
+        <button id="send-btn">Send</button>
+    </div>
+
+    <script>
+        const chatbox = document.getElementById('chatbox');
+        const input = document.getElementById('input');
+        const sendBtn = document.getElementById('send-btn');
+        const micBtn = document.getElementById('mic-btn');
+        const dot = document.querySelector('.dot');
+        let conversationHistory = [];
+        let recognizing = false;
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+
+        micBtn.addEventListener('click', () => {
+            if (recognizing) {
+                recognition.stop();
+                micBtn.classList.remove('recording');
+                recognizing = false;
+            } else {
+                recognition.start();
+                micBtn.classList.add('recording');
+                recognizing = true;
+            }
+        });
+
+        recognition.addEventListener('result', (event) => {
+            const transcript = event.results[0][0].transcript;
+            input.value = transcript;
+        });
+
+        recognition.addEventListener('end', () => {
+            recognizing = false;
+            micBtn.classList.remove('recording');
+        });
+
+        sendBtn.addEventListener('click', () => {
+            const userInput = input.value.trim();
+            if (!userInput) return;
+
+            const userMessage = document.createElement('p');
+            userMessage.innerHTML = `<strong>You:</strong> ${userInput}`;
+            chatbox.appendChild(userMessage);
+            input.value = '';
+
+            fetch('/acc/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ sentence: userInput })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Backend Response:', data);
+
+                const assistantMessage = document.createElement('p');
+
+                if (data.status === "success") {
+                    let rawResponse = data.raw_response;
+                    rawResponse = rawResponse.replace(/\n/g, '<br>');
+
+                    const formattedJson = JSON.stringify(data.raw_response, null, 2);
+
+                    const escapedJson = formattedJson.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/&/g, '&amp;');
+
+                    assistantMessage.innerHTML = `<strong>Assistant:</strong> Voucher entry is successful! <pre><br>${rawResponse}</pre>`;
+                } else {
+                    assistantMessage.innerHTML = `<strong>Assistant:</strong> ${data.message}`;
+                }
+
+                chatbox.appendChild(assistantMessage);
+                chatbox.scrollTop = chatbox.scrollHeight;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                const errorMessage = document.createElement('p');
+                errorMessage.innerHTML = '<strong>Error:</strong> Something went wrong.';
+                chatbox.appendChild(errorMessage);
+                chatbox.scrollTop = chatbox.scrollHeight;
+            });
+        });
+
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendBtn.click();
+            }
+        });
+    </script>
+
+</body>
+
+</html>
+
